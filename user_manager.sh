@@ -142,6 +142,37 @@ do_create_user() {
   fi
 }
 
+zone_update_serial() {
+  zone_file_raw=$(cat $zone_file_path)
+  zone_soa=$(echo "$zone_file_raw" | sed -r -e '/^[a-z|A-Z|@|\d|\.|\-]+.*SOA.*\(/,/\)/!d')
+  zone_serial=""
+  if [ ! -z "$zone_soa" ]; then
+    zone_serial=$(echo "$zone_soa" | tr "\n" " " | sed -r -e 's|^.*\([ |;]+([0-9]{10}).*$|\1|g')
+    if [ ${#zone_serial} -eq 10 ]; then
+      zone_serial_date=$(echo $zone_serial | cut -c 1-8)
+      zone_serial_n=$(echo $zone_serial | cut -c 9-10)
+      zone_current_date=$(date +"%Y%m%d")
+      if [ $zone_current_date = $zone_serial_date ]; then
+        if [ $(echo $zone_serial_n | cut -c 1 ) = "0" ]; then
+          zone_serial_n=$(echo $zone_serial_n | cut -c 2 )
+        fi
+        zone_serial_n=$((zone_serial_n + 1))
+        if [ $zone_serial_n -ge 100 ]; then
+          zone_serial_n=1
+        fi
+        if [ ${#zone_serial_n} -eq 1 ]; then
+          zone_serial_n="0"$zone_serial_n
+        fi
+        zone_serial=$zone_serial_date$zone_serial_n
+      else
+        zone_serial=$zone_current_date"01"
+      fi
+      zone_file_raw=$(echo "$zone_file_raw" | perl -0pe 's/^([a-z|A-Z|\d|\.|\-]+.*SOA.*)([0-9]{10})(.*\))/\1\l'$zone_serial'\3/gms')
+      echo "$zone_file_raw" > $zone_file_path
+    fi
+  fi
+}
+
 do_delete_user() {
   logger "WORKER: removing a user account..."
   if [ -z $1 ]; then
